@@ -9,15 +9,17 @@ main() {
     CONTAINER_NAME=${CONTAINER_NAME:-my-app-container}
 
     BUILD_LOG="/tmp/docker_build_$(date +%Y%m%d_%H%M%S).log"
-    echo "Build log availbale here: ${BUILD_LOG}"
+    echo "Build log available here: ${BUILD_LOG}"
+    
+    read -p "Enter the host port to expose the container (EXPOSE in Dockerfile): " PORT
+    read -p "Enter the server port used inside the container (e.g., 80, 443): " SERVER_PORT
+
     OLD_IMAGES_AND_CONTAINERS=()
 
     echo "Using current directory as repo: $(pwd)"
 
-    # Get port details from user
-    read -p "Enter the host port to expose the container (EXPOSE in Dockerfile): " PORT
-    read -p "Enter the server port used inside the container (e.g., 80, 443): " SERVER_PORT
-
+  
+  
     # Check for Dockerfile
     if [ ! -f "Dockerfile" ]; then
         echo "ERROR: Dockerfile not found in the current directory. Aborting."
