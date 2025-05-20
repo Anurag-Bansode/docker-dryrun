@@ -1,13 +1,18 @@
 #!/bin/bash
 
 main() {
-    # Set variables
-    IMAGE_NAME="my-app"
-    CONTAINER_NAME="my-app-container"
+    # Ask user for image and container names
+    read -p "Enter Docker image name (default: my-app): " IMAGE_NAME
+    IMAGE_NAME=${IMAGE_NAME:-my-app}
+
+    read -p "Enter Docker container name (default: my-app-container): " CONTAINER_NAME
+    CONTAINER_NAME=${CONTAINER_NAME:-my-app-container}
+
     BUILD_LOG="/tmp/docker_build_$(date +%Y%m%d_%H%M%S).log"
+    echo "Build log availbale here: $(BUILD_LOG)"
+    OLD_IMAGES_AND_CONTAINERS=()
 
     echo "Using current directory as repo: $(pwd)"
-    echo "Build log available here :${BUILD_LOG}"
 
     # Check for Dockerfile
     if [ ! -f "Dockerfile" ]; then
@@ -15,15 +20,14 @@ main() {
         return 1
     fi
 
-    # Step 1: Pull latest code
+    # Pull latest code
     echo "Pulling latest changes..."
-    git pull origin main || { echo "ERROR: Git pull failed!"; return 1; }
+    git pull origin main || { echo "ERROR: Git pull failed."; return 1; }
 
-    # Step 2: List existing Docker images
     echo "Existing Docker images:"
     docker images
 
-    # Step 3: If image doesn't exist, build fresh
+    # Check if image exists
     echo "Checking if image '$IMAGE_NAME' exists..."
     if ! docker image inspect "$IMAGE_NAME" > /dev/null 2>&1; then
         echo "Image '$IMAGE_NAME' does not exist. Building fresh image..."
@@ -33,30 +37,9 @@ main() {
         }
         echo "Initial build complete."
     else
-        # Step 4: Check for old image older than 2 days
-        echo "Checking for old image '$IMAGE_NAME' older than 2 days..."
-        OLD_IMAGE_ID=$(docker images --filter=reference="$IMAGE_NAME" --format "{{.ID}} {{.CreatedAt}}" | while read id created_at; do
-            image_time=$(date -d "$created_at" +%s)
-            now=$(date +%s)
-            age_days=$(( (now - image_time) / 86400 ))
-            if [ "$age_days" -ge 2 ]; then
-                echo "$id"
-                break
-            fi
-        done)
-
-        if [ -n "$OLD_IMAGE_ID" ]; then
-            echo "Removing old image ID: $OLD_IMAGE_ID"
-            docker rmi "$OLD_IMAGE_ID"
-        else
-            echo "No image older than 2 days to delete."
-        fi
-
-        # Step 5: Build new image
-        echo "Building new Docker image: $IMAGE_NAME"
+        echo "Building updated Docker image: $IMAGE_NAME"
         if ! docker build -t "$IMAGE_NAME" . > "$BUILD_LOG" 2>&1; then
-            echo "ERROR: Docker build failed. Log saved to $BUILD_LOG"
-            echo "Last working container '$CONTAINER_NAME' is still running (if any)."
+            echo "ERROR: Docker build failed. See log at $BUILD_LOG"
             echo "Do you want to:"
             echo "1. Retry build"
             echo "2. Exit and keep the current container"
@@ -72,25 +55,78 @@ main() {
         fi
     fi
 
-    # Step 6: Prompt for port
-    read -p "Enter the host port to expose the container (e.g., 4098): " PORT
+    # Get port details from user
+    read -p "Enter the host port to expose the container (EXPOSE in Dockerfile): " PORT
+    read -p "Enter the server port used inside the container (e.g., 80, 443): " SERVER_PORT
 
-    # Step 7: Stop and remove old container
+    # Stop and remove old container
     echo "Stopping and removing old container (if exists)..."
     docker stop "$CONTAINER_NAME" 2>/dev/null
     docker rm "$CONTAINER_NAME" 2>/dev/null
 
-    # Step 8: Run new container
+    # Run new container
     echo "Running new container '$CONTAINER_NAME' on port $PORT..."
-    docker run -d -p "$PORT:80" --name "$CONTAINER_NAME" "$IMAGE_NAME" || {
-        echo "ERROR: Docker run failed. Check logs or container state."
+    if ! docker run -d -p "$PORT:$SERVER_PORT" --name "$CONTAINER_NAME" "$IMAGE_NAME"; then
+        echo "ERROR: Docker run failed. Check container status manually."
         return 1
-    }
+    fi
 
-    echo "Deployment successful. App running at: http://localhost:$PORT"
+    echo "Deployment successful. Application is accessible at: http://localhost:$PORT"
+
+    # Look for old images older than 2 days
+    echo "Checking for images older than 2 days..."
+    now=$(date +%s)
+    while read image_id; do
+        created_str=$(docker inspect --format '{{.Created}}' "$image_id" 2>/dev/null)
+        created_time=$(date -d "$created_str" +%s 2>/dev/null)
+
+        if [ $? -ne 0 ]; then
+            echo "Skipping image $image_id (unreadable creation time: $created_str)"
+            continue
+        fi
+
+        age_days=$(( (now - created_time) / 86400 ))
+        if [ "$age_days" -ge 2 ]; then
+            OLD_IMAGES_AND_CONTAINERS+=("$image_id")
+        fi
+    done < <(docker images --format "{{.ID}}" | sort -u)
+
+    if [ ${#OLD_IMAGES_AND_CONTAINERS[@]} -gt 0 ]; then
+        echo "Old images (older than 2 days):"
+        for img in "${OLD_IMAGES_AND_CONTAINERS[@]}"; do
+            echo "  $img"
+        done
+
+        read -p "Do you want to remove these old images and their containers? (y/n): " CONFIRM
+        if [[ "$CONFIRM" == "y" || "$CONFIRM" == "Y" ]]; then
+            for img in "${OLD_IMAGES_AND_CONTAINERS[@]}"; do
+                echo "Removing containers using image $img (if any)..."
+                CONTAINERS=$(docker ps -a -q --filter ancestor="$img")
+                if [ -n "$CONTAINERS" ]; then
+                    docker stop $CONTAINERS
+                    docker rm $CONTAINERS
+                fi
+                echo "Removing image $img"
+                docker rmi "$img"
+            done
+        else
+            echo "Skipped deletion of old images."
+        fi
+    else
+        echo "No old images found."
+    fi
+
+    # Show running containers and images
+    echo "------------------------------"
+    echo "Running Docker containers:"
+    docker ps
+    echo ""
+    echo "Available Docker images:"
+    docker images
+    echo "------------------------------"
 }
 
-# Trap any error and keep terminal open
-trap 'echo -e "\nScript exited with error code $?"; read -p "Press Enter to close..."' EXIT
+# Trap for exit and pause
+trap 'EXIT_CODE=$?; if [ $EXIT_CODE -ne 0 ]; then echo -e "\nScript failed with exit code $EXIT_CODE."; fi; read -p "Press Enter to exit..."' EXIT
 
 main
