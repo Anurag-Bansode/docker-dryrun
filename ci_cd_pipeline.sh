@@ -19,11 +19,6 @@ main() {
         echo "ERROR: Dockerfile not found in the current directory. Aborting."
         return 1
     fi
-
-    # Pull latest code
-    echo "Pulling latest changes..."
-    git pull origin main || { echo "ERROR: Git pull failed."; return 1; }
-
     echo "Existing Docker images:"
     docker images
 
