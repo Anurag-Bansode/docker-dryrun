@@ -12,10 +12,11 @@ main() {
     echo "Build log available here: ${BUILD_LOG}"
     
     read -p "Enter the host port to expose the container (EXPOSE in Dockerfile): " PORT
-    $PORT=${PORT:-4908}
+    PORT=${PORT:-4908}
     
     read -p "Enter the server port used inside the container (e.g., 80, 443): " SERVER_PORT
-    $SERVER_PORT=${SERVER_PORT:-4908}
+    
+    SERVER_PORT=${SERVER_PORT:-4908}
     
 
     OLD_IMAGES_AND_CONTAINERS=()
