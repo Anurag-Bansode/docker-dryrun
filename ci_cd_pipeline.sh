@@ -7,6 +7,7 @@ main() {
     BUILD_LOG="/tmp/docker_build_$(date +%Y%m%d_%H%M%S).log"
 
     echo "Using current directory as repo: $(pwd)"
+    echo "Build log available here :${BUILD_LOG}"
 
     # Check for Dockerfile
     if [ ! -f "Dockerfile" ]; then
