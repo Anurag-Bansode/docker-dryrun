@@ -9,7 +9,7 @@ main() {
     CONTAINER_NAME=${CONTAINER_NAME:-my-app-container}
 
     BUILD_LOG="/tmp/docker_build_$(date +%Y%m%d_%H%M%S).log"
-    echo "Build log availbale here: $(BUILD_LOG)"
+    echo "Build log availbale here: ${BUILD_LOG}"
     OLD_IMAGES_AND_CONTAINERS=()
 
     echo "Using current directory as repo: $(pwd)"
