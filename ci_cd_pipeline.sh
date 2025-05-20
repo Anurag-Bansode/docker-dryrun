@@ -14,6 +14,10 @@ main() {
 
     echo "Using current directory as repo: $(pwd)"
 
+    # Get port details from user
+    read -p "Enter the host port to expose the container (EXPOSE in Dockerfile): " PORT
+    read -p "Enter the server port used inside the container (e.g., 80, 443): " SERVER_PORT
+
     # Check for Dockerfile
     if [ ! -f "Dockerfile" ]; then
         echo "ERROR: Dockerfile not found in the current directory. Aborting."
@@ -49,10 +53,6 @@ main() {
             fi
         fi
     fi
-
-    # Get port details from user
-    read -p "Enter the host port to expose the container (EXPOSE in Dockerfile): " PORT
-    read -p "Enter the server port used inside the container (e.g., 80, 443): " SERVER_PORT
 
     # Stop and remove old container
     echo "Stopping and removing old container (if exists)..."
